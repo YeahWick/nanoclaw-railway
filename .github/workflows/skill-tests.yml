@@ -2,7 +2,7 @@ name: Skill Combination Tests
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'claude/**']
     paths:
       - 'skills-engine/**'
       - '.claude/skills/**'

@@ -2,7 +2,7 @@ name: Skill PR Check
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'claude/**']
 
 jobs:
   check:
