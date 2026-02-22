@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NanoClaw Railway Setup Guide</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --text: #e4e4e7;
+      --text-muted: #9ca3af;
+      --accent: #8b5cf6;
+      --accent-dim: #6d28d9;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --code-bg: #12141c;
+      --radius: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    header {
+      text-align: center;
+      padding: 3rem 0 2rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--blue));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.7rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-time { background: var(--accent-dim); color: white; }
+
+    h2 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin: 2.5rem 0 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    h2 .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin: 1.5rem 0 0.5rem;
+      color: var(--text);
+    }
+
+    p { margin-bottom: 1rem; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      margin: 1rem 0;
+    }
+
+    .prereq-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    .prereq-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .prereq-item .icon { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .prereq-item .label { font-weight: 600; font-size: 0.95rem; }
+    .prereq-item .desc { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      margin: 0.75rem 0 1.25rem;
+      position: relative;
+    }
+
+    code {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+
+    p code, li code {
+      background: var(--code-bg);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.85em;
+      border: 1px solid var(--border);
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 0.3rem 0.6rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover { background: var(--border); color: var(--text); }
+    .copy-btn.copied { color: var(--green); border-color: var(--green); }
+
+    ul, ol { margin: 0.5rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.4rem; }
+
+    .env-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    .env-table th, .env-table td {
+      text-align: left;
+      padding: 0.6rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .env-table th {
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .env-table td:first-child { font-family: monospace; color: var(--accent); }
+
+    .required { color: var(--red); font-weight: 600; }
+    .optional { color: var(--text-muted); }
+
+    .warning {
+      background: rgba(234, 179, 8, 0.1);
+      border: 1px solid rgba(234, 179, 8, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    .info {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    .checklist {
+      list-style: none;
+      margin-left: 0;
+      padding: 0;
+    }
+
+    .checklist li {
+      padding: 0.5rem 0;
+      padding-left: 1.8rem;
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .checklist li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0.65rem;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .checklist li.checked::before {
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .checklist li.checked::after {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 0.7rem;
+      width: 8px;
+      height: 5px;
+      border-left: 2px solid white;
+      border-bottom: 2px solid white;
+      transform: rotate(-45deg);
+    }
+
+    .checklist li.checked { color: var(--text-muted); text-decoration: line-through; }
+
+    .progress-bar {
+      background: var(--border);
+      border-radius: 999px;
+      height: 8px;
+      margin: 1rem 0 0.5rem;
+      overflow: hidden;
+    }
+
+    .progress-bar .fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--green));
+      border-radius: 999px;
+      transition: width 0.4s ease;
+    }
+
+    .progress-text {
+      text-align: right;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .arch-diagram {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      margin: 1rem 0;
+      font-family: monospace;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      overflow-x: auto;
+      white-space: pre;
+      color: var(--text-muted);
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem 0;
+      margin-top: 3rem;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 600px) {
+      .container { padding: 1rem; }
+      header h1 { font-size: 1.6rem; }
+      .prereq-grid { grid-template-columns: 1fr; }
+      .env-table { font-size: 0.8rem; }
+      .env-table td, .env-table th { padding: 0.4rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>NanoClaw on Railway</h1>
+      <p>Deploy your personal Claude assistant with Telegram</p>
+      <div style="margin-top: 0.75rem;">
+        <span class="badge badge-time">~15 min setup</span>
+      </div>
+    </header>
+
+    <!-- Progress tracker -->
+    <div class="card" id="progress-card">
+      <strong>Setup Progress</strong>
+      <div class="progress-bar"><div class="fill" id="progress-fill" style="width: 0%"></div></div>
+      <div class="progress-text" id="progress-text">0 / 5 steps</div>
+    </div>
+
+    <!-- Architecture overview -->
+    <h2>How it works</h2>
+    <div class="arch-diagram">
+  iPhone (Telegram)
+       |
+       v
+  Telegram Bot API
+       |
+       v
++-------------------------------+
+| Railway Container             |
+|  +-------------------------+  |
+|  | NanoClaw Router         |  |
+|  | - Message polling       |  |
+|  | - Queue management      |  |
+|  +----------+--------------+  |
+|             |                 |
+|  +----------v--------------+  |
+|  | Agent Runner (process)  |  |
+|  | - Claude Agent SDK      |  |
+|  | - MCP tools             |  |
+|  +-------------------------+  |
+|             |                 |
+|  +----------v--------------+  |
+|  | /data (persistent vol)  |  |
+|  | - SQLite DB             |  |
+|  | - Group memory          |  |
+|  | - Session history       |  |
+|  +-------------------------+  |
++-------------------------------+
+    </div>
+
+    <!-- Prerequisites -->
+    <h2><span class="step-num">0</span> Prerequisites</h2>
+    <div class="prereq-grid">
+      <div class="prereq-item">
+        <div class="icon">&#x1f527;</div>
+        <div class="label">Railway Account</div>
+        <div class="desc"><a href="https://railway.app" target="_blank">railway.app</a></div>
+      </div>
+      <div class="prereq-item">
+        <div class="icon">&#x1f916;</div>
+        <div class="label">Telegram Bot</div>
+        <div class="desc">From <a href="https://t.me/BotFather" target="_blank">@BotFather</a></div>
+      </div>
+      <div class="prereq-item">
+        <div class="icon">&#x1f511;</div>
+        <div class="label">Anthropic API Key</div>
+        <div class="desc"><a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></div>
+      </div>
+      <div class="prereq-item">
+        <div class="icon">&#x1f4bb;</div>
+        <div class="label">GitHub Account</div>
+        <div class="desc">To fork the repo</div>
+      </div>
+    </div>
+
+    <!-- Step 1: Telegram Bot -->
+    <h2><span class="step-num">1</span> Create Telegram Bot</h2>
+    <ul class="checklist" data-step="1">
+      <li>Open Telegram and message <a href="https://t.me/BotFather" target="_blank">@BotFather</a></li>
+      <li>Send <code>/newbot</code> and follow the prompts</li>
+      <li>Copy the bot token (looks like <code>123456:ABC-DEF...</code>)</li>
+      <li>Send <code>/setprivacy</code> &rarr; choose your bot &rarr; <strong>Disable</strong> (so the bot sees all messages in groups)</li>
+      <li>Add the bot to your Telegram group</li>
+    </ul>
+
+    <div class="info">
+      <strong>Tip:</strong> Give your bot a descriptive name and profile picture. This is how it appears in Telegram.
+    </div>
+
+    <!-- Step 2: Fork & Deploy -->
+    <h2><span class="step-num">2</span> Fork &amp; Deploy on Railway</h2>
+    <ul class="checklist" data-step="2">
+      <li>Fork the NanoClaw repository on GitHub</li>
+      <li>Go to <a href="https://railway.app/new" target="_blank">railway.app/new</a> &rarr; Deploy from GitHub Repo</li>
+      <li>Select your forked repo</li>
+      <li>Railway auto-detects the Dockerfile and starts building</li>
+    </ul>
+
+    <!-- Step 3: Configure Secrets -->
+    <h2><span class="step-num">3</span> Configure Environment Variables</h2>
+    <p>In Railway dashboard &rarr; your service &rarr; <strong>Variables</strong> tab:</p>
+
+    <table class="env-table">
+      <thead>
+        <tr><th>Variable</th><th>Value</th><th>Required</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>ANTHROPIC_API_KEY</td>
+          <td>Your Anthropic API key</td>
+          <td class="required">Required</td>
+        </tr>
+        <tr>
+          <td>TELEGRAM_BOT_TOKEN</td>
+          <td>Token from @BotFather</td>
+          <td class="required">Required</td>
+        </tr>
+        <tr>
+          <td>ASSISTANT_NAME</td>
+          <td>Bot display name (default: Andy)</td>
+          <td class="optional">Optional</td>
+        </tr>
+        <tr>
+          <td>PROCESS_MODE</td>
+          <td><code>true</code></td>
+          <td><em>Set by Dockerfile</em></td>
+        </tr>
+        <tr>
+          <td>TELEGRAM_ONLY</td>
+          <td><code>true</code></td>
+          <td><em>Set by Dockerfile</em></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="warning">
+      <strong>Security:</strong> Never commit API keys to your repository. Always use Railway's Variables tab for secrets.
+    </div>
+
+    <ul class="checklist" data-step="3">
+      <li>Add <code>ANTHROPIC_API_KEY</code> in Railway Variables</li>
+      <li>Add <code>TELEGRAM_BOT_TOKEN</code> in Railway Variables</li>
+      <li>Optionally set <code>ASSISTANT_NAME</code></li>
+    </ul>
+
+    <!-- Step 4: Volume -->
+    <h2><span class="step-num">4</span> Add Persistent Storage</h2>
+    <p>NanoClaw needs persistent storage for its database, group memory, and session history.</p>
+
+    <ul class="checklist" data-step="4">
+      <li>In Railway dashboard, go to your service &rarr; <strong>Settings</strong></li>
+      <li>Under <strong>Volumes</strong>, click <strong>+ New Volume</strong></li>
+      <li>Set mount path to <code>/data</code></li>
+      <li>Choose size (1 GB is plenty to start)</li>
+    </ul>
+
+    <div class="info">
+      <strong>Cost:</strong> Railway persistent volumes cost $0.25/GB/month. 1 GB is more than enough for most setups.
+    </div>
+
+    <!-- Step 5: Register main group -->
+    <h2><span class="step-num">5</span> Register Your Main Chat</h2>
+    <p>After deployment, you need to register your Telegram group (or private chat) as the main channel.</p>
+
+    <h3>Find your chat ID</h3>
+    <p>Send a message in your Telegram group where you added the bot, then check the logs in Railway:</p>
+    <pre><code>Railway Dashboard &rarr; your service &rarr; Logs tab</code><button class="copy-btn" onclick="copyText(this)">Copy</button></pre>
+    <p>Look for a log line like:</p>
+    <pre><code>Chat metadata stored: tg:-1001234567890</code><button class="copy-btn" onclick="copyText(this)">Copy</button></pre>
+
+    <h3>Register via the bot</h3>
+    <p>For first-time setup, you can register your main chat by sending a message with the trigger word (default: <code>@Andy</code>) in the chat. The simplest approach:</p>
+
+    <ol>
+      <li>Note the chat JID from the logs (e.g., <code>tg:-1001234567890</code>)</li>
+      <li>Connect to your Railway service shell (Railway dashboard &rarr; service &rarr; Shell tab)</li>
+      <li>Run:
+        <pre><code>node -e "
+const { initDatabase, setRegisteredGroup, storeChatMetadata } = require('./dist/db.js');
+initDatabase();
+storeChatMetadata('tg:YOUR_CHAT_ID', new Date().toISOString(), 'My Chat', 'telegram', true);
+setRegisteredGroup('tg:YOUR_CHAT_ID', {
+  name: 'Main',
+  folder: 'main',
+  trigger: '@Andy',
+  added_at: new Date().toISOString(),
+  requiresTrigger: false,
+});
+console.log('Main chat registered!');
+"</code><button class="copy-btn" onclick="copyText(this)">Copy</button></pre>
+      </li>
+      <li>Replace <code>YOUR_CHAT_ID</code> with your actual chat ID (e.g., <code>-1001234567890</code>)</li>
+      <li>Restart the service for changes to take effect</li>
+    </ol>
+
+    <ul class="checklist" data-step="5">
+      <li>Found chat ID in Railway logs</li>
+      <li>Registered main chat via Railway shell</li>
+      <li>Bot responds to messages</li>
+    </ul>
+
+    <!-- Troubleshooting -->
+    <h2>Troubleshooting</h2>
+    <div class="card">
+      <h3>Bot doesn't respond to group messages</h3>
+      <ul>
+        <li>Check that you disabled privacy mode via @BotFather (<code>/setprivacy</code> &rarr; Disable)</li>
+        <li>Make sure the chat is registered (check logs for "no channel owns JID")</li>
+        <li>Verify the bot token is correct in Railway Variables</li>
+      </ul>
+
+      <h3>Build fails on Railway</h3>
+      <ul>
+        <li>Check that your fork includes the <code>Dockerfile</code> in the root</li>
+        <li>Railway should auto-detect Docker builds</li>
+        <li>Check build logs for npm dependency errors</li>
+      </ul>
+
+      <h3>Agent errors (Claude SDK)</h3>
+      <ul>
+        <li>Verify <code>ANTHROPIC_API_KEY</code> is set correctly</li>
+        <li>Check your API key has sufficient credits</li>
+        <li>Look at process logs in Railway for detailed error messages</li>
+      </ul>
+
+      <h3>Data lost on redeploy</h3>
+      <ul>
+        <li>Make sure you have a volume mounted at <code>/data</code></li>
+        <li>Volumes persist across deploys; the container filesystem does not</li>
+      </ul>
+    </div>
+
+    <!-- Cost estimate -->
+    <h2>Cost Estimate</h2>
+    <div class="card">
+      <table class="env-table">
+        <thead><tr><th>Service</th><th>Estimate</th></tr></thead>
+        <tbody>
+          <tr><td>Railway (Hobby)</td><td>$5/mo (includes $5 of usage)</td></tr>
+          <tr><td>Railway Volume (1 GB)</td><td>$0.25/mo</td></tr>
+          <tr><td>Anthropic API</td><td>Pay per use (varies)</td></tr>
+          <tr><td style="font-weight: 600;">Total (excl. API)</td><td style="font-weight: 600;">~$5.25/mo</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <footer>
+      NanoClaw &mdash; Personal Claude assistant
+    </footer>
+  </div>
+
+  <script>
+    // Checklist interactivity
+    const STORAGE_KEY = 'nanoclaw-setup-progress';
+
+    function loadProgress() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      } catch { return {}; }
+    }
+
+    function saveProgress(progress) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    }
+
+    function updateProgressBar() {
+      const progress = loadProgress();
+      const steps = document.querySelectorAll('.checklist[data-step]');
+      let total = 0;
+      let checked = 0;
+
+      steps.forEach(list => {
+        list.querySelectorAll('li').forEach((li, i) => {
+          total++;
+          const key = `${list.dataset.step}-${i}`;
+          if (progress[key]) {
+            checked++;
+            li.classList.add('checked');
+          } else {
+            li.classList.remove('checked');
+          }
+        });
+      });
+
+      const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('progress-text').textContent = `${checked} / ${total} items`;
+    }
+
+    // Set up click handlers
+    document.querySelectorAll('.checklist[data-step]').forEach(list => {
+      list.querySelectorAll('li').forEach((li, i) => {
+        li.addEventListener('click', () => {
+          const progress = loadProgress();
+          const key = `${list.dataset.step}-${i}`;
+          progress[key] = !progress[key];
+          saveProgress(progress);
+          updateProgressBar();
+        });
+      });
+    });
+
+    updateProgressBar();
+
+    // Copy button
+    function copyText(btn) {
+      const code = btn.parentElement.querySelector('code');
+      navigator.clipboard.writeText(code.textContent).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>

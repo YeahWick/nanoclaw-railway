@@ -4,6 +4,7 @@
  */
 import { execSync } from 'child_process';
 
+import { PROCESS_MODE } from './config.js';
 import { logger } from './logger.js';
 
 /** The container runtime binary name. */
@@ -21,6 +22,11 @@ export function stopContainer(name: string): string {
 
 /** Ensure the container runtime is running, starting it if needed. */
 export function ensureContainerRuntimeRunning(): void {
+  if (PROCESS_MODE) {
+    logger.debug('Process mode — skipping container runtime check');
+    return;
+  }
+
   try {
     execSync(`${CONTAINER_RUNTIME_BIN} info`, { stdio: 'pipe', timeout: 10000 });
     logger.debug('Container runtime already running');
@@ -56,6 +62,8 @@ export function ensureContainerRuntimeRunning(): void {
 
 /** Kill orphaned NanoClaw containers from previous runs. */
 export function cleanupOrphans(): void {
+  if (PROCESS_MODE) return;
+
   try {
     const output = execSync(
       `${CONTAINER_RUNTIME_BIN} ps --filter name=nanoclaw- --format '{{.Names}}'`,

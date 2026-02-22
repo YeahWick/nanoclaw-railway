@@ -8,12 +8,14 @@ import os from 'os';
 import path from 'path';
 
 import {
+  AGENT_RUNNER_PATH,
   CONTAINER_IMAGE,
   CONTAINER_MAX_OUTPUT_SIZE,
   CONTAINER_TIMEOUT,
   DATA_DIR,
   GROUPS_DIR,
   IDLE_TIMEOUT,
+  PROCESS_MODE,
 } from './config.js';
 import { readEnvFile } from './env.js';
 import { logger } from './logger.js';
@@ -217,6 +219,10 @@ export async function runContainerAgent(
   onProcess: (proc: ChildProcess, containerName: string) => void,
   onOutput?: (output: ContainerOutput) => Promise<void>,
 ): Promise<ContainerOutput> {
+  if (PROCESS_MODE) {
+    return runProcessAgent(group, input, onProcess, onOutput);
+  }
+
   const startTime = Date.now();
 
   const groupDir = path.join(GROUPS_DIR, group.folder);
@@ -642,4 +648,252 @@ export function writeGroupsSnapshot(
       2,
     ),
   );
+}
+
+/**
+ * Process mode: run agent-runner as a child Node.js process instead of a container.
+ * Used on Railway and other platforms where nested containers are unavailable.
+ * Workspace paths are passed via environment variables instead of bind mounts.
+ */
+async function runProcessAgent(
+  group: RegisteredGroup,
+  input: ContainerInput,
+  onProcess: (proc: ChildProcess, containerName: string) => void,
+  onOutput?: (output: ContainerOutput) => Promise<void>,
+): Promise<ContainerOutput> {
+  const startTime = Date.now();
+
+  const groupDir = path.join(GROUPS_DIR, group.folder);
+  fs.mkdirSync(groupDir, { recursive: true });
+
+  const globalDir = path.join(GROUPS_DIR, 'global');
+  fs.mkdirSync(globalDir, { recursive: true });
+
+  // IPC directory (same structure as container mode)
+  const groupIpcDir = path.join(DATA_DIR, 'ipc', group.folder);
+  fs.mkdirSync(path.join(groupIpcDir, 'messages'), { recursive: true });
+  fs.mkdirSync(path.join(groupIpcDir, 'tasks'), { recursive: true });
+  fs.mkdirSync(path.join(groupIpcDir, 'input'), { recursive: true });
+
+  // Per-group Claude sessions directory
+  const groupSessionsDir = path.join(DATA_DIR, 'sessions', group.folder, '.claude');
+  fs.mkdirSync(groupSessionsDir, { recursive: true });
+  const settingsFile = path.join(groupSessionsDir, 'settings.json');
+  if (!fs.existsSync(settingsFile)) {
+    fs.writeFileSync(settingsFile, JSON.stringify({
+      env: {
+        CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+        CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
+        CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0',
+      },
+    }, null, 2) + '\n');
+  }
+
+  // Sync skills
+  const skillsSrc = path.join(process.cwd(), 'container', 'skills');
+  const skillsDst = path.join(groupSessionsDir, 'skills');
+  if (fs.existsSync(skillsSrc)) {
+    for (const skillDir of fs.readdirSync(skillsSrc)) {
+      const srcDir = path.join(skillsSrc, skillDir);
+      if (!fs.statSync(srcDir).isDirectory()) continue;
+      const dstDir = path.join(skillsDst, skillDir);
+      fs.cpSync(srcDir, dstDir, { recursive: true });
+    }
+  }
+
+  const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
+  const processName = `nanoclaw-proc-${safeName}-${Date.now()}`;
+
+  // Build environment for the child process
+  const secrets = readSecrets();
+  const childEnv: Record<string, string> = {
+    ...process.env as Record<string, string>,
+    // Workspace paths (instead of bind mounts)
+    NANOCLAW_WORKSPACE_GROUP: groupDir,
+    NANOCLAW_WORKSPACE_GLOBAL: globalDir,
+    NANOCLAW_IPC_DIR: groupIpcDir,
+    // Claude home (sessions, settings)
+    HOME: path.dirname(groupSessionsDir), // parent of .claude/
+    // Merge secrets into env for the SDK
+    ...secrets,
+  };
+
+  const logsDir = path.join(GROUPS_DIR, group.folder, 'logs');
+  fs.mkdirSync(logsDir, { recursive: true });
+
+  logger.info(
+    {
+      group: group.name,
+      processName,
+      isMain: input.isMain,
+      agentRunner: AGENT_RUNNER_PATH,
+    },
+    'Spawning agent process (process mode)',
+  );
+
+  return new Promise((resolve) => {
+    const proc = spawn('node', [AGENT_RUNNER_PATH], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: childEnv,
+    });
+
+    onProcess(proc, processName);
+
+    let stdout = '';
+    let stderr = '';
+    let stdoutTruncated = false;
+    let stderrTruncated = false;
+
+    // Pass config via stdin (same protocol as container mode)
+    input.secrets = secrets;
+    proc.stdin.write(JSON.stringify(input));
+    proc.stdin.end();
+    delete input.secrets;
+
+    // Streaming output parsing (identical to container mode)
+    let parseBuffer = '';
+    let newSessionId: string | undefined;
+    let outputChain = Promise.resolve();
+    let hadStreamingOutput = false;
+    let timedOut = false;
+
+    const configTimeout = group.containerConfig?.timeout || CONTAINER_TIMEOUT;
+    const timeoutMs = Math.max(configTimeout, IDLE_TIMEOUT + 30_000);
+
+    const killOnTimeout = () => {
+      timedOut = true;
+      logger.error({ group: group.name, processName }, 'Process timeout, sending SIGTERM');
+      proc.kill('SIGTERM');
+      setTimeout(() => {
+        if (!proc.killed) {
+          logger.warn({ group: group.name, processName }, 'SIGTERM failed, sending SIGKILL');
+          proc.kill('SIGKILL');
+        }
+      }, 15000);
+    };
+
+    let timeout = setTimeout(killOnTimeout, timeoutMs);
+    const resetTimeout = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(killOnTimeout, timeoutMs);
+    };
+
+    proc.stdout.on('data', (data) => {
+      const chunk = data.toString();
+      if (!stdoutTruncated) {
+        const remaining = CONTAINER_MAX_OUTPUT_SIZE - stdout.length;
+        if (chunk.length > remaining) {
+          stdout += chunk.slice(0, remaining);
+          stdoutTruncated = true;
+        } else {
+          stdout += chunk;
+        }
+      }
+
+      if (onOutput) {
+        parseBuffer += chunk;
+        let startIdx: number;
+        while ((startIdx = parseBuffer.indexOf(OUTPUT_START_MARKER)) !== -1) {
+          const endIdx = parseBuffer.indexOf(OUTPUT_END_MARKER, startIdx);
+          if (endIdx === -1) break;
+
+          const jsonStr = parseBuffer
+            .slice(startIdx + OUTPUT_START_MARKER.length, endIdx)
+            .trim();
+          parseBuffer = parseBuffer.slice(endIdx + OUTPUT_END_MARKER.length);
+
+          try {
+            const parsed: ContainerOutput = JSON.parse(jsonStr);
+            if (parsed.newSessionId) newSessionId = parsed.newSessionId;
+            hadStreamingOutput = true;
+            resetTimeout();
+            outputChain = outputChain.then(() => onOutput(parsed));
+          } catch (err) {
+            logger.warn({ group: group.name, error: err }, 'Failed to parse streamed output');
+          }
+        }
+      }
+    });
+
+    proc.stderr.on('data', (data) => {
+      const chunk = data.toString();
+      const lines = chunk.trim().split('\n');
+      for (const line of lines) {
+        if (line) logger.debug({ process: group.folder }, line);
+      }
+      if (stderrTruncated) return;
+      const remaining = CONTAINER_MAX_OUTPUT_SIZE - stderr.length;
+      if (chunk.length > remaining) {
+        stderr += chunk.slice(0, remaining);
+        stderrTruncated = true;
+      } else {
+        stderr += chunk;
+      }
+    });
+
+    proc.on('close', (code) => {
+      clearTimeout(timeout);
+      const duration = Date.now() - startTime;
+
+      if (timedOut) {
+        if (hadStreamingOutput) {
+          logger.info({ group: group.name, processName, duration }, 'Process timed out after output (idle cleanup)');
+          outputChain.then(() => resolve({ status: 'success', result: null, newSessionId }));
+          return;
+        }
+        resolve({ status: 'error', result: null, error: `Process timed out after ${configTimeout}ms` });
+        return;
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const logFile = path.join(logsDir, `process-${timestamp}.log`);
+      const logLines = [
+        `=== Process Run Log ===`,
+        `Timestamp: ${new Date().toISOString()}`,
+        `Group: ${group.name}`,
+        `Duration: ${duration}ms`,
+        `Exit Code: ${code}`,
+      ];
+      if (code !== 0) {
+        logLines.push(`=== Stderr ===`, stderr, `=== Stdout ===`, stdout);
+      }
+      fs.writeFileSync(logFile, logLines.join('\n'));
+
+      if (code !== 0) {
+        logger.error({ group: group.name, code, duration }, 'Process exited with error');
+        resolve({ status: 'error', result: null, error: `Process exited with code ${code}: ${stderr.slice(-200)}` });
+        return;
+      }
+
+      if (onOutput) {
+        outputChain.then(() => {
+          logger.info({ group: group.name, duration, newSessionId }, 'Process completed (streaming)');
+          resolve({ status: 'success', result: null, newSessionId });
+        });
+        return;
+      }
+
+      // Legacy mode
+      try {
+        const startIdx = stdout.indexOf(OUTPUT_START_MARKER);
+        const endIdx = stdout.indexOf(OUTPUT_END_MARKER);
+        let jsonLine: string;
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+          jsonLine = stdout.slice(startIdx + OUTPUT_START_MARKER.length, endIdx).trim();
+        } else {
+          const lines = stdout.trim().split('\n');
+          jsonLine = lines[lines.length - 1];
+        }
+        resolve(JSON.parse(jsonLine));
+      } catch (err) {
+        resolve({ status: 'error', result: null, error: `Failed to parse output: ${err instanceof Error ? err.message : String(err)}` });
+      }
+    });
+
+    proc.on('error', (err) => {
+      clearTimeout(timeout);
+      logger.error({ group: group.name, processName, error: err }, 'Process spawn error');
+      resolve({ status: 'error', result: null, error: `Process spawn error: ${err.message}` });
+    });
+  });
 }
