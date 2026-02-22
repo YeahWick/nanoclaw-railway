@@ -9,6 +9,7 @@ import { readEnvFile } from './env.js';
 const envConfig = readEnvFile([
   'ASSISTANT_NAME',
   'ASSISTANT_HAS_OWN_NUMBER',
+  'TELEGRAM_BOT_TOKEN',
 ]);
 
 export const ASSISTANT_NAME =
@@ -17,6 +18,22 @@ export const ASSISTANT_HAS_OWN_NUMBER =
   (process.env.ASSISTANT_HAS_OWN_NUMBER || envConfig.ASSISTANT_HAS_OWN_NUMBER) === 'true';
 export const POLL_INTERVAL = 2000;
 export const SCHEDULER_POLL_INTERVAL = 60000;
+
+// --- Telegram ---
+export const TELEGRAM_BOT_TOKEN =
+  process.env.TELEGRAM_BOT_TOKEN || envConfig.TELEGRAM_BOT_TOKEN || '';
+// When true, only Telegram is used (no WhatsApp). Set for Railway deployments.
+export const TELEGRAM_ONLY =
+  (process.env.TELEGRAM_ONLY || '') === 'true' || (!!(TELEGRAM_BOT_TOKEN) && process.env.TELEGRAM_ONLY !== 'false');
+
+// --- Process mode (Railway / Docker — no nested containers) ---
+// When true, agent-runner is spawned as a child Node.js process instead of a container.
+export const PROCESS_MODE =
+  (process.env.PROCESS_MODE || '') === 'true';
+// Path to compiled agent-runner entry point (used in PROCESS_MODE)
+export const AGENT_RUNNER_PATH =
+  process.env.AGENT_RUNNER_PATH ||
+  path.resolve(process.cwd(), 'container', 'agent-runner', 'dist', 'index.js');
 
 // Absolute paths needed for container mounts
 const PROJECT_ROOT = process.cwd();
@@ -29,9 +46,10 @@ export const MOUNT_ALLOWLIST_PATH = path.join(
   'nanoclaw',
   'mount-allowlist.json',
 );
-export const STORE_DIR = path.resolve(PROJECT_ROOT, 'store');
-export const GROUPS_DIR = path.resolve(PROJECT_ROOT, 'groups');
-export const DATA_DIR = path.resolve(PROJECT_ROOT, 'data');
+// Paths overridable via env for Railway persistent volume (e.g., /data)
+export const STORE_DIR = process.env.NANOCLAW_STORE_DIR || path.resolve(PROJECT_ROOT, 'store');
+export const GROUPS_DIR = process.env.NANOCLAW_GROUPS_DIR || path.resolve(PROJECT_ROOT, 'groups');
+export const DATA_DIR = process.env.NANOCLAW_DATA_DIR || path.resolve(PROJECT_ROOT, 'data');
 export const MAIN_GROUP_FOLDER = 'main';
 
 export const CONTAINER_IMAGE =
