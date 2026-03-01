@@ -1,11 +1,14 @@
-# Minimal Telegram echo bot — for testing Railway container → Telegram connectivity
-# Uses Node 22 native fetch, no npm dependencies needed
+# Minimal Telegram echo bot — webhook mode for serverless Railway deploys
+# Uses Node 22 native fetch + http, no npm dependencies needed
 FROM node:22-slim
 
 WORKDIR /app
 COPY bot.js .
 
-# TELEGRAM_BOT_TOKEN must be set as a Railway environment variable
+# Railway injects PORT automatically; Telegram token and optional webhook URL override
 ENV TELEGRAM_BOT_TOKEN=""
+ENV WEBHOOK_URL=""
+
+EXPOSE 3000
 
 CMD ["node", "bot.js"]
